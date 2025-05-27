@@ -2,10 +2,14 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import AudioPlayer from 'player.style/tailwind-audio/react'
-import { Suspense } from 'react'
 import Markdown from 'react-markdown'
+
+const AudioPlayer = dynamic(() => import('player.style/tailwind-audio/react'), {
+  ssr: false,
+  loading: () => <Skeleton className="w-full h-24" />,
+})
 
 interface ArticleCardProps {
   article: Article
@@ -29,22 +33,20 @@ export function ArticleCard({ article, staticHost = '', showSummary = false, sho
         </CardTitle>
       </CardHeader>
       <CardContent className="h-32">
-        <Suspense fallback={<Skeleton className="w-full h-28" />}>
-          <AudioPlayer
-            className="w-full"
-            style={{ '--media-primary-color': '#18181b', '--media-secondary-color': '#f2f2f3', '--media-accent-color': '#18181b' } as React.CSSProperties}
+        <AudioPlayer
+          className="w-full"
+          style={{ '--media-primary-color': '#18181b', '--media-secondary-color': '#f2f2f3', '--media-accent-color': '#18181b' } as React.CSSProperties}
+        >
+          <audio
+            slot="media"
+            src={audio}
+            preload="metadata"
+            playsInline
+            crossOrigin="anonymous"
+            tabIndex={article.updatedAt || -1}
           >
-            <audio
-              slot="media"
-              src={audio}
-              preload="metadata"
-              playsInline
-              crossOrigin="anonymous"
-              tabIndex={article.updatedAt || -1}
-            >
-            </audio>
-          </AudioPlayer>
-        </Suspense>
+          </audio>
+        </AudioPlayer>
       </CardContent>
       {showFooter && (
         <CardFooter className="flex-col">
