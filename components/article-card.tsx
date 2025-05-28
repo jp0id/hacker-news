@@ -62,7 +62,7 @@ export function ArticleCard({ article, staticHost = '', showSummary = false, sho
               <TabsTrigger value="podcast" className="font-bold">播客</TabsTrigger>
               <TabsTrigger value="references" className="font-bold">参考</TabsTrigger>
             </TabsList>
-            <TabsContent value="summary" className="prose prose-zinc max-w-none py-4">
+            <TabsContent value="summary" className="prose prose-zinc max-w-none py-4 prose-a:no-underline hover:prose-a:underline">
               <Markdown>{article.blogContent}</Markdown>
             </TabsContent>
             <TabsContent value="podcast" className="prose prose-zinc max-w-none whitespace-pre-line py-4">
