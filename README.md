@@ -93,14 +93,16 @@ pnpm dev
 
 ```bash
 # 更新 Worker 的私有变量
-wrangler secret put --cwd worker HACKER_NEWS_WORKER_URL # 绑定域名后，修改为绑定域名
-wrangler secret put --cwd worker HACKER_NEWS_R2_BUCKET_URL
-wrangler secret put --cwd worker OPENAI_API_KEY
-wrangler secret put --cwd worker OPENAI_BASE_URL
-wrangler secret put --cwd worker OPENAI_MODEL
+pnpx wrangler secret put --cwd worker HACKER_NEWS_WORKER_URL # 绑定域名后，修改为绑定域名
+pnpx wrangler secret put --cwd worker HACKER_NEWS_R2_BUCKET_URL
+pnpx wrangler secret put --cwd worker OPENAI_API_KEY
+pnpx wrangler secret put --cwd worker OPENAI_BASE_URL
+pnpx wrangler secret put --cwd worker OPENAI_MODEL
 
 # 更新 Web 程序的私有变量
-wrangler secret put NEXT_STATIC_HOST # 绑定域名后，修改为绑定域名
+pnpx wrangler secret put NEXTJS_ENV # Next.JS 环境，建议 production
+pnpx wrangler secret put NEXT_PUBLIC_BASE_URL # Web 服务地址
+pnpx wrangler secret put NEXT_STATIC_HOST # 绑定域名后，修改为绑定域名
 ```
 
 ```bash
