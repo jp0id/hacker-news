@@ -6,6 +6,7 @@ interface Env extends CloudflareEnv {
   TTS_API_URL?: string
   TTS_API_ID?: string
   TTS_API_KEY?: string
+  TTS_MODEL?: string
   MAN_VOICE_ID?: string
   WOMAN_VOICE_ID?: string
   AUDIO_SPEED?: string
@@ -29,7 +30,7 @@ async function minimaxTTS(text: string, gender: string, env: Env) {
       'Authorization': `Bearer ${env.TTS_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'speech-02-turbo',
+      model: env.TTS_MODEL || 'speech-2.5-turbo-preview',
       text,
       timber_weights: [
         {
