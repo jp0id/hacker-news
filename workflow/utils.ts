@@ -1,5 +1,6 @@
 import puppeteer from '@cloudflare/puppeteer'
 import * as cheerio from 'cheerio'
+import { $fetch } from 'ofetch'
 
 async function getContentFromJina(url: string, format: 'html' | 'markdown', selector?: { include?: string, exclude?: string }, JINA_KEY?: string) {
   const jinaHeaders: HeadersInit = {
@@ -20,43 +21,37 @@ async function getContentFromJina(url: string, format: 'html' | 'markdown', sele
   }
 
   console.info('get content from jina', url)
-  const response = await fetch(`https://r.jina.ai/${url}`, {
+  const content = await $fetch(`https://r.jina.ai/${url}`, {
     headers: jinaHeaders,
+    timeout: 30000,
+    parseResponse: txt => txt,
   })
-  if (response.ok) {
-    const text = await response.text()
-    return text
-  }
-  else {
-    console.error(`get content from jina failed: ${response.statusText} ${url}`)
-    return ''
-  }
+  return content
 }
 
 async function getContentFromFirecrawl(url: string, format: 'html' | 'markdown', selector?: { include?: string, exclude?: string }, FIRECRAWL_KEY?: string) {
   const firecrawlHeaders: HeadersInit = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${FIRECRAWL_KEY}`,
+    Authorization: `Bearer ${FIRECRAWL_KEY}`,
   }
 
   console.info('get content from firecrawl', url)
-  const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+  const result = await $fetch<{ success: boolean, data: Record<string, string> }>('https://api.firecrawl.dev/v2/scrape', {
     method: 'POST',
     headers: firecrawlHeaders,
-    body: JSON.stringify({
+    timeout: 30000,
+    body: {
       url,
       formats: [format],
       onlyMainContent: true,
-      include_tags: selector?.include ? [selector.include] : undefined,
-      exclude_tags: selector?.exclude ? [selector.exclude] : undefined,
-    }),
+      includeTags: selector?.include ? [selector.include] : undefined,
+      excludeTags: selector?.exclude ? [selector.exclude] : undefined,
+    },
   })
-  const result = await response.json() as { success: boolean, data: Record<string, string> }
   if (result.success) {
     return result.data[format] || ''
   }
   else {
-    console.error(`get content from firecrawl failed: ${response.statusText} ${url}`)
+    console.error(`get content from firecrawl failed: ${url} ${result}`)
     return ''
   }
 }
@@ -98,8 +93,8 @@ export async function getHackerNewsStory(story: Story, maxTokens: number, { JINA
   const [article, comments] = await Promise.all([
     getContentFromJina(story.url!, 'markdown', {}, JINA_KEY)
       .catch(() => getContentFromFirecrawl(story.url!, 'markdown', {}, FIRECRAWL_KEY)),
-    getContentFromJina(`https://news.ycombinator.com/item?id=${story.id}`, 'markdown', { include: '#pagespace + tr', exclude: '.navs' }, JINA_KEY)
-      .catch(() => getContentFromFirecrawl(`https://news.ycombinator.com/item?id=${story.id}`, 'markdown', { include: '#pagespace + tr', exclude: '.navs' }, FIRECRAWL_KEY)),
+    getContentFromJina(`https://news.ycombinator.com/item?id=${story.id}`, 'markdown', { include: '.comment-tree', exclude: '.navs' }, JINA_KEY)
+      .catch(() => getContentFromFirecrawl(`https://news.ycombinator.com/item?id=${story.id}`, 'markdown', { include: '.comment-tree', exclude: '.navs' }, FIRECRAWL_KEY)),
   ])
   return [
     story.title
@@ -112,14 +107,14 @@ ${story.title}
     article
       ? `
 <article>
-${article.substring(0, maxTokens * 4)}
+${article.substring(0, maxTokens * 5)}
 </article>
 `
       : '',
     comments
       ? `
 <comments>
-${comments.substring(0, maxTokens * 4)}
+${comments.substring(0, maxTokens * 5)}
 </comments>
 `
       : '',

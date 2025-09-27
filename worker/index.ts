@@ -25,12 +25,22 @@ export default {
 
     return new Response('create workflow success')
   },
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    if (!env.BROWSER && request.method === 'POST') {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const { pathname, hostname } = new URL(request.url)
+    if (request.method === 'POST' && hostname === 'localhost') {
       // curl -X POST http://localhost:8787
       return this.runWorkflow(request, env, ctx)
     }
-    return Response.redirect('https://hacker-news.agi.li/')
+    if (pathname.includes('/static')) {
+      const filename = pathname.replace('/static/', '')
+      const file = await env.HACKER_NEWS_R2.get(filename)
+      console.info('fetch static file:', filename, {
+        uploaded: file?.uploaded,
+        size: file?.size,
+      })
+      return new Response(file?.body)
+    }
+    return Response.redirect(`https://hacker-news.agi.li/${pathname}`, 302)
   },
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     return this.runWorkflow(event, env, ctx)

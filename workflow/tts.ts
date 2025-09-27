@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { synthesize } from '@echristian/edge-tts'
+import { $fetch } from 'ofetch'
 
 interface Env extends CloudflareEnv {
   TTS_PROVIDER?: string
@@ -23,12 +24,13 @@ async function edgeTTS(text: string, gender: string, env: Env) {
 }
 
 async function minimaxTTS(text: string, gender: string, env: Env) {
-  const res = await fetch(`${env.TTS_API_URL || 'https://api.minimax.chat/v1/t2a_v2'}?GroupId=${env.TTS_API_ID}`, {
+  const result = await $fetch<{ data: { audio: string }, base_resp: { status_msg: string } }>(`${env.TTS_API_URL || 'https://api.minimax.chat/v1/t2a_v2'}?GroupId=${env.TTS_API_ID}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${env.TTS_API_KEY}`,
     },
+    timeout: 30000,
     body: JSON.stringify({
       model: env.TTS_MODEL || 'speech-2.5-turbo-preview',
       text,
@@ -54,15 +56,11 @@ async function minimaxTTS(text: string, gender: string, env: Env) {
     }),
   })
 
-  if (res.ok) {
-    const result: { data: { audio: string }, base_resp: { status_msg: string } } = await res.json()
-    if (result?.data?.audio) {
-      const buffer = Buffer.from(result.data.audio, 'hex')
-      return new Blob([buffer.buffer], { type: 'audio/mpeg' })
-    }
-    throw new Error(`Failed to fetch audio: ${result?.base_resp?.status_msg}`)
+  if (result?.data?.audio) {
+    const buffer = Buffer.from(result.data.audio, 'hex')
+    return new Blob([buffer.buffer], { type: 'audio/mpeg' })
   }
-  throw new Error(`Failed to fetch audio: ${res.statusText}`)
+  throw new Error(`Failed to fetch audio: ${result?.base_resp?.status_msg}`)
 }
 
 export default function (text: string, gender: string, env: Env) {
