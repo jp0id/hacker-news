@@ -28,6 +28,12 @@ export async function GET() {
     categories: ['technology', 'news'],
     itunesImage: `${baseUrl}/logo.png`,
     itunesCategory: [{ text: 'Technology' }, { text: 'News' }],
+    itunesOwner: {
+      name: podcastTitle,
+      email: 'hacker-news@agi.li',
+    },
+    managingEditor: 'hacker-news@agi.li',
+    webMaster: 'hacker-news@agi.li',
   })
 
   const { env } = await getCloudflareContext({ async: true })
