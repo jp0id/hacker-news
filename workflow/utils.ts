@@ -34,24 +34,30 @@ async function getContentFromFirecrawl(url: string, format: 'html' | 'markdown',
     Authorization: `Bearer ${FIRECRAWL_KEY}`,
   }
 
-  console.info('get content from firecrawl', url)
-  const result = await $fetch<{ success: boolean, data: Record<string, string> }>('https://api.firecrawl.dev/v2/scrape', {
-    method: 'POST',
-    headers: firecrawlHeaders,
-    timeout: 30000,
-    body: {
-      url,
-      formats: [format],
-      onlyMainContent: true,
-      includeTags: selector?.include ? [selector.include] : undefined,
-      excludeTags: selector?.exclude ? [selector.exclude] : undefined,
-    },
-  })
-  if (result.success) {
-    return result.data[format] || ''
+  try {
+    console.info('get content from firecrawl', url)
+    const result = await $fetch<{ success: boolean, data: Record<string, string> }>('https://api.firecrawl.dev/v2/scrape', {
+      method: 'POST',
+      headers: firecrawlHeaders,
+      timeout: 30000,
+      body: {
+        url,
+        formats: [format],
+        onlyMainContent: true,
+        includeTags: selector?.include ? [selector.include] : undefined,
+        excludeTags: selector?.exclude ? [selector.exclude] : undefined,
+      },
+    })
+    if (result.success) {
+      return result.data[format] || ''
+    }
+    else {
+      console.error(`get content from firecrawl failed: ${url} ${result}`)
+      return ''
+    }
   }
-  else {
-    console.error(`get content from firecrawl failed: ${url} ${result}`)
+  catch (error: Error | any) {
+    console.error(`get content from firecrawl failed: ${url} ${error}`, error.data)
     return ''
   }
 }
