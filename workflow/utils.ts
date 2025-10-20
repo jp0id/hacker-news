@@ -1,25 +1,83 @@
 import puppeteer from '@cloudflare/puppeteer'
 import * as cheerio from 'cheerio'
+import { $fetch } from 'ofetch'
 
-export async function getHackerNewsTopStories(today: string, JINA_KEY?: string) {
-  const url = `https://news.ycombinator.com/front?day=${today}`
-  const headers: HeadersInit = {
+async function getContentFromJina(url: string, format: 'html' | 'markdown', selector?: { include?: string, exclude?: string }, JINA_KEY?: string) {
+  const jinaHeaders: HeadersInit = {
     'X-Retain-Images': 'none',
-    'X-Return-Format': 'html',
+    'X-Return-Format': format,
   }
 
   if (JINA_KEY) {
-    headers.Authorization = `Bearer ${JINA_KEY}`
+    jinaHeaders.Authorization = `Bearer ${JINA_KEY}`
   }
-  console.info(`get top stories ${today} from ${url}`)
-  const response = await fetch(`https://r.jina.ai/${url}`, {
-    headers,
-  })
-  console.info(`get top stories result: ${response.statusText}`)
-  const text = await response.text()
 
-  const $ = cheerio.load(text)
-  const stories: Story[] = $('.athing.submission').map((i, el) => ({
+  if (selector?.include) {
+    jinaHeaders['X-Target-Selector'] = selector.include
+  }
+
+  if (selector?.exclude) {
+    jinaHeaders['X-Remove-Selector'] = selector.exclude
+  }
+
+  console.info('get content from jina', url)
+  const content = await $fetch(`https://r.jina.ai/${url}`, {
+    headers: jinaHeaders,
+    timeout: 30000,
+    parseResponse: txt => txt,
+  })
+  return content
+}
+
+async function getContentFromFirecrawl(url: string, format: 'html' | 'markdown', selector?: { include?: string, exclude?: string }, FIRECRAWL_KEY?: string) {
+  const firecrawlHeaders: HeadersInit = {
+    Authorization: `Bearer ${FIRECRAWL_KEY}`,
+  }
+
+  try {
+    console.info('get content from firecrawl', url)
+    const result = await $fetch<{ success: boolean, data: Record<string, string> }>('https://api.firecrawl.dev/v2/scrape', {
+      method: 'POST',
+      headers: firecrawlHeaders,
+      timeout: 30000,
+      body: {
+        url,
+        formats: [format],
+        onlyMainContent: true,
+        includeTags: selector?.include ? [selector.include] : undefined,
+        excludeTags: selector?.exclude ? [selector.exclude] : undefined,
+      },
+    })
+    if (result.success) {
+      return result.data[format] || ''
+    }
+    else {
+      console.error(`get content from firecrawl failed: ${url} ${result}`)
+      return ''
+    }
+  }
+  catch (error: Error | any) {
+    console.error(`get content from firecrawl failed: ${url} ${error}`, error.data)
+    return ''
+  }
+}
+
+export async function getHackerNewsTopStories(today: string, { JINA_KEY, FIRECRAWL_KEY }: { JINA_KEY?: string, FIRECRAWL_KEY?: string }) {
+  const url = `https://news.ycombinator.com/front?day=${today}`
+
+  const html = await getContentFromJina(url, 'html', {}, JINA_KEY)
+
+  let $ = cheerio.load(html)
+  let items = $('.athing.submission')
+
+  if (!items.length) {
+    const html = await getContentFromFirecrawl(url, 'html', {}, FIRECRAWL_KEY)
+
+    $ = cheerio.load(html)
+    items = $('.athing.submission')
+  }
+
+  const stories: Story[] = items.map((i, el) => ({
     id: $(el).attr('id'),
     title: $(el).find('.titleline > a').text(),
     url: $(el).find('.titleline > a').attr('href'),
@@ -29,7 +87,7 @@ export async function getHackerNewsTopStories(today: string, JINA_KEY?: string) 
   return stories.filter(story => story.id && story.url)
 }
 
-export async function getHackerNewsStory(story: Story, maxTokens: number, JINA_KEY?: string) {
+export async function getHackerNewsStory(story: Story, maxTokens: number, { JINA_KEY, FIRECRAWL_KEY }: { JINA_KEY?: string, FIRECRAWL_KEY?: string }) {
   const headers: HeadersInit = {
     'X-Retain-Images': 'none',
   }
@@ -39,32 +97,10 @@ export async function getHackerNewsStory(story: Story, maxTokens: number, JINA_K
   }
 
   const [article, comments] = await Promise.all([
-    fetch(`https://r.jina.ai/${story.url}`, {
-      headers,
-    }).then((res) => {
-      if (res.ok) {
-        return res.text()
-      }
-      else {
-        console.error(`get story failed: ${res.statusText}  ${story.url}`)
-        return ''
-      }
-    }),
-    fetch(`https://r.jina.ai/https://news.ycombinator.com/item?id=${story.id}`, {
-      headers: {
-        ...headers,
-        'X-Remove-Selector': '.navs',
-        'X-Target-Selector': '#pagespace + tr',
-      },
-    }).then((res) => {
-      if (res.ok) {
-        return res.text()
-      }
-      else {
-        console.error(`get story comments failed: ${res.statusText} https://news.ycombinator.com/item?id=${story.id}`)
-        return ''
-      }
-    }),
+    getContentFromJina(story.url!, 'markdown', {}, JINA_KEY)
+      .catch(() => getContentFromFirecrawl(story.url!, 'markdown', {}, FIRECRAWL_KEY)),
+    getContentFromJina(`https://news.ycombinator.com/item?id=${story.id}`, 'markdown', { include: '.comment-tree', exclude: '.navs' }, JINA_KEY)
+      .catch(() => getContentFromFirecrawl(`https://news.ycombinator.com/item?id=${story.id}`, 'markdown', { include: '.comment-tree', exclude: '.navs' }, FIRECRAWL_KEY)),
   ])
   return [
     story.title
@@ -77,14 +113,14 @@ ${story.title}
     article
       ? `
 <article>
-${article.substring(0, maxTokens * 4)}
+${article.substring(0, maxTokens * 5)}
 </article>
 `
       : '',
     comments
       ? `
 <comments>
-${comments.substring(0, maxTokens * 4)}
+${comments.substring(0, maxTokens * 5)}
 </comments>
 `
       : '',

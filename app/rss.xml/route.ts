@@ -1,52 +1,42 @@
-import { podcastDescription, podcastTitle } from '@/config'
-import { getPastDays } from '@/lib/utils'
+import process from 'node:process'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import markdownit from 'markdown-it'
-import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { Podcast } from 'podcast'
+import { podcastDescription, podcastTitle } from '@/config'
+import { getPastDays } from '@/lib/utils'
 
 const md = markdownit()
 
-export const revalidate = 300
+export const revalidate = 3600
 
-export async function GET(request: Request) {
-  // 创建缓存键
-  const cacheUrl = new URL(request.url)
-  const cacheKey = new Request(cacheUrl.toString())
-  const cache = typeof caches !== 'undefined' ? await caches.open('rss-feed-cache') : undefined
-
-  if (cache) {
-    const response = await cache.match(cacheKey)
-
-    if (response) {
-      // 如果有缓存，直接返回缓存的响应
-      console.info('Returning cached RSS feed response')
-      return response
-    }
-  }
+export async function GET() {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? ''
 
   // 如果没有缓存，生成新的响应
-  const headersList = await headers()
-  const host = headersList.get('host')
-
   const feed = new Podcast({
     title: podcastTitle,
     description: podcastDescription,
-    feedUrl: `https://${host}/rss.xml`,
-    siteUrl: `https://${host}`,
-    imageUrl: `https://${host}/logo.jpg`,
+    feedUrl: `${baseUrl}/rss.xml`,
+    siteUrl: baseUrl,
+    imageUrl: `${baseUrl}/logo.png`,
     language: 'zh-CN',
     pubDate: new Date(),
     ttl: 60,
     generator: podcastTitle,
     author: podcastTitle,
     categories: ['technology', 'news'],
-    itunesImage: `https://${host}/logo.jpg`,
+    itunesImage: `${baseUrl}/logo.png`,
     itunesCategory: [{ text: 'Technology' }, { text: 'News' }],
+    itunesOwner: {
+      name: podcastTitle,
+      email: 'hacker-news@agi.li',
+    },
+    managingEditor: 'hacker-news@agi.li',
+    webMaster: 'hacker-news@agi.li',
   })
 
-  const { env } = getCloudflareContext()
+  const { env } = await getCloudflareContext({ async: true })
   const runEnv = env.NEXTJS_ENV
   const pastDays = getPastDays(10)
   const posts = (await Promise.all(
@@ -68,8 +58,8 @@ export async function GET(request: Request) {
       title: post.title || '',
       description: post.introContent || post.podcastContent || '',
       content: finalContent,
-      url: `https://${host}/post/${post.date}`,
-      guid: `https://${host}/post/${post.date}`,
+      url: `${baseUrl}/post/${post.date}`,
+      guid: `${baseUrl}/post/${post.date}`,
       date: new Date(post.updatedAt || post.date),
       enclosure: {
         url: `${env.NEXT_STATIC_HOST}/${post.audio}?t=${post.updatedAt}`,
@@ -85,14 +75,6 @@ export async function GET(request: Request) {
       'Cache-Control': `public, max-age=${revalidate}, s-maxage=${revalidate}`,
     },
   })
-
-  if (cache) {
-    const responseToCache = response.clone()
-
-    await cache.put(cacheKey, responseToCache).catch((error) => {
-      console.error('Failed to cache RSS feed:', error)
-    })
-  }
 
   return response
 }
